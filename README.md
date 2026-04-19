@@ -156,12 +156,33 @@ Completes in ~30s with no real inputs required.
 
 No part of the stock nf-core module is modified.
 
+## L2 — trace → manifest (shipped v0.2.0)
+
+Every run ends with a `workflow.onComplete` hook that parses
+`results/_nextflow/<run_tag>/execution_trace.txt` and writes per-assay
+columns to casetrack via one `casetrack append --analysis <tool>_trace`
+call per tool. This lets the DB answer "did this fail biologically or
+did it run out of memory?" from a single query.
+
+Columns added per tracked tool (`<prefix>` from `[analyses.<tool>].column_prefix`):
+
+| Column | Type | Source |
+|---|---|---|
+| `{prefix}_slurm_job_id`    | TEXT    | Nextflow `native_id` (empty under local executor) |
+| `{prefix}_realtime_sec`    | INTEGER | Nextflow `realtime` parsed from `"1h30m"` / `"5s"` |
+| `{prefix}_peak_rss_bytes`  | INTEGER | Nextflow `peak_rss` parsed from `"500 MB"` / `"2 GB"` |
+| `{prefix}_exit_status`     | INTEGER | Nextflow `exit` (0 on success) |
+| `{prefix}_attempts`        | INTEGER | Nextflow `attempt` (last retry wins) |
+| `{prefix}_queue`           | TEXT    | SLURM queue (empty under local executor) |
+| `{prefix}_pileup_trace_done`| TEXT   | Timestamp of trace import (auto-added by `casetrack append`) |
+
+Processes without a matching `[analyses.<tool>]` entry (e.g. our own
+`SUMMARIZE_MODKIT` and `CASETRACK_REGISTER`) are automatically skipped.
+
+Opt out via `--casetrack_import_trace=false` on the pipeline invocation.
+
 ## Roadmap
 
-- **L2 — trace parser**: `workflow.onComplete` hook that parses
-  `results/_nextflow/<run_tag>/execution_trace.txt` into assay-level
-  columns (`slurm_job_id`, `realtime`, `peak_rss`, `exit_status`,
-  `attempts`). Lets you tell "failed QC" from "OOM-killed."
 - **L3 — versions → manifest**: the nf-core `topic: versions` channel
   gets collected via `collectFile` and written as run-level metadata via
   `casetrack add-metadata`.

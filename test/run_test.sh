@@ -87,6 +87,31 @@ LEAF="${PROJ}/results/${TOOL}/${RUN_TAG}/P01/P01_primary/P01_primary_ONT1"
 test -f "${LEAF}/modkit_summary.tsv" \
     || { echo "FAIL: summary TSV missing at ${LEAF}"; exit 1; }
 
+# ── 5. L2 assertions — trace import ──────────────────────────────────────────
 echo
-echo "PASS — stub smoke test OK"
+echo "== asserting trace import (L2)"
+TRACE="${PROJ}/results/_nextflow/${RUN_TAG}/execution_trace.txt"
+test -f "${TRACE}" || { echo "FAIL: trace file missing at ${TRACE}"; exit 1; }
+
+# Show what columns the trace import added.
+sqlite3 -header -separator ' | ' "${DB}" \
+    "SELECT modkit_exit_status, modkit_attempts, modkit_realtime_sec, modkit_queue FROM assays WHERE assay_id='P01_primary_ONT1';"
+
+EXIT_STATUS=$(SELECT "SELECT modkit_exit_status FROM assays WHERE assay_id='P01_primary_ONT1';")
+test "${EXIT_STATUS}" = "0" \
+    || { echo "FAIL: expected modkit_exit_status=0, got '${EXIT_STATUS}'"; exit 1; }
+
+ATTEMPTS=$(SELECT "SELECT modkit_attempts FROM assays WHERE assay_id='P01_primary_ONT1';")
+test "${ATTEMPTS}" = "1" \
+    || { echo "FAIL: expected modkit_attempts=1, got '${ATTEMPTS}'"; exit 1; }
+
+# realtime_sec / peak_rss / slurm_job_id are best-effort under local executor
+# with -stub — just check the columns exist.
+for col in modkit_realtime_sec modkit_peak_rss_bytes modkit_slurm_job_id modkit_queue; do
+    sqlite3 "${DB}" "SELECT ${col} FROM assays LIMIT 1;" >/dev/null 2>&1 \
+        || { echo "FAIL: trace column ${col} not created"; exit 1; }
+done
+
+echo
+echo "PASS — stub smoke test OK (L1 + L2)"
 echo "       workspace: ${TMPROOT}"
