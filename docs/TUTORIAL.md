@@ -251,4 +251,43 @@ The container doesn't ship `ps` (`procps`). Harmless warning; Nextflow falls bac
 - **Query your whole cohort** with `casetrack dashboard` — self-contained HTML, one row per assay.
 - **Scale out**: add more samples to `samplesheet.csv`. Each assay runs in parallel on SLURM; `CASETRACK_REGISTER` throttles to `maxForks=1` automatically so SQLite WAL doesn't contend.
 - **Add more tools**: see "Adding a new tracked tool" above.
-- **Integrate with nf-core pipelines**: you can run `nf-core/methylseq` and still use the Pattern A (trace-only) tracking by just declaring its modules in your `casetrack.toml`.
+- **Integrate with nf-core pipelines** (unmodified): use the drop-in config below.
+
+## Pattern C — drop-in config for an unmodified nf-core pipeline
+
+If you want to run a stock nf-core pipeline (e.g. `nf-core/methylong`, `nf-core/sarek`, `nf-core/methylseq`) without forking it, use `conf/casetrack_dropin.config`. It adds L2 + L3 tracking via `-c` on the CLI.
+
+```bash
+nextflow run nf-core/methylong -r 2.0.0 \
+    -c /path/to/casetrack-nf-subworkflows/conf/casetrack_dropin.config \
+    -c /path/to/your/site.config \
+    --input                         samplesheet.csv \
+    --outdir                        "${PROJ}/results/_methylong_run/${RUN_TAG}" \
+    --casetrack_project_dir         "${PROJ}" \
+    --run_tag                       "${RUN_TAG}" \
+    --casetrack_level               specimen \
+    --casetrack_helper_dir          /path/to/casetrack-nf-subworkflows/bin \
+    --casetrack_samplesheet_key_col sample \
+    -profile                        apptainer
+```
+
+What the drop-in does:
+- Enables extended Nextflow trace fields (process, tag, queue, attempt).
+- On `workflow.onComplete`, invokes `bin/trace_to_casetrack.py` (L2) and `bin/versions_to_casetrack.py` (L3) against the declared `[analyses.*]` tools in your casetrack project.
+- **Does not** add L1 data columns — those still require per-tool wrappers (Pattern B). With the drop-in you get trace metadata + versions for free, which is often all you need when using upstream pipelines.
+
+You **must** declare the tools in your casetrack project's `casetrack.toml`:
+
+```toml
+[analyses.modkit_pileup]
+level         = "specimen"   # methylong writes per-specimen outputs
+column_prefix = "modkit"
+summary_tsv   = "modkit_summary.tsv"
+
+[analyses.samtools_flagstat]
+level         = "specimen"
+column_prefix = "flagstat"
+summary_tsv   = "flagstat_summary.tsv"
+```
+
+Any tool whose uppercased name matches an `[analyses.*]` key gets tracked. Unknown tools in the trace file are silently skipped.
