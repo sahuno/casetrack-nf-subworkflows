@@ -125,7 +125,7 @@ nextflow run main.nf \
 ```
 
 After the run, the casetrack DB has one row per assay with columns
-`modkit_mean_meth`, `modkit_n_cpgs`, `modkit_median_cov`, `modkit_run_tag`,
+`modkit_mean_meth`, `modkit_n_cpgs`, `modkit_mean_cov`, `modkit_run_tag`,
 and `modkit_pileup_done` — populated via a single
 `casetrack append --infer-from-path` call per sample.
 

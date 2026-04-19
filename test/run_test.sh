@@ -72,7 +72,7 @@ DB="${PROJ}/casetrack.db"
 echo
 echo "== asserting DB state"
 sqlite3 -header -separator ' | ' "${DB}" \
-    "SELECT assay_id, modkit_mean_meth, modkit_n_cpgs, modkit_median_cov, modkit_run_tag, modkit_pileup_done FROM assays WHERE assay_id='P01_primary_ONT1';"
+    "SELECT assay_id, modkit_mean_meth, modkit_n_cpgs, modkit_mean_cov, modkit_run_tag, modkit_pileup_done FROM assays WHERE assay_id='P01_primary_ONT1';"
 
 SELECT() { sqlite3 "${DB}" "$@"; }
 

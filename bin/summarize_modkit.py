@@ -16,7 +16,6 @@ import gzip
 import logging
 import sys
 from pathlib import Path
-from statistics import median
 
 
 def parse_args() -> argparse.Namespace:
@@ -28,6 +27,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--output", required=True, help="Output summary TSV path")
     p.add_argument("--min-coverage", type=int, default=5,
                    help="Minimum per-site coverage to include in the mean (default: 5)")
+    p.add_argument("--mod-code", default="m",
+                   help="Mod code to summarize (default: 'm' = 5mC). Use 'any' "
+                        "to include all; modkit pileup emits one row per site per "
+                        "mod code (m, h, a) so filtering is usually required.")
     return p.parse_args()
 
 
@@ -69,32 +72,55 @@ def main() -> int:
         log.error("bedMethyl not found: %s", src)
         return 1
 
-    pcts: list[float] = []
-    coverages: list[int] = []
+    # Streaming single-pass stats — constant memory regardless of input size.
+    # modkit chr21 WGS pileup emits ~55M rows (3 mod codes per site); a
+    # naive list-based approach OOMs even at 2 GB. Mean coverage replaces
+    # median because a true streaming median would require extra machinery
+    # (P² or t-digest) without adding much decision value at this scope.
+    mod_filter = None if args.mod_code == "any" else args.mod_code
     n_cpgs = 0
+    n_skipped_mod = 0
+    n_skipped_cov = 0
+    sum_pct = 0.0
+    sum_cov = 0
+
     for chrom, start, end, mod, cov, pct in iter_bedmethyl(src):
-        if cov < args.min_coverage:
+        if mod_filter is not None and mod != mod_filter:
+            n_skipped_mod += 1
             continue
-        pcts.append(pct)
-        coverages.append(cov)
+        if cov < args.min_coverage:
+            n_skipped_cov += 1
+            continue
+        sum_pct += pct
+        sum_cov += cov
         n_cpgs += 1
 
     if n_cpgs == 0:
-        log.warning("No sites met min-coverage=%d in %s", args.min_coverage, src)
+        log.warning(
+            "No sites met mod=%s min-coverage=%d in %s "
+            "(skipped_mod=%d skipped_cov=%d)",
+            args.mod_code, args.min_coverage, src, n_skipped_mod, n_skipped_cov,
+        )
         mean_meth = float("nan")
-        median_cov = 0
+        mean_cov = 0.0
     else:
-        mean_meth = sum(pcts) / len(pcts) / 100.0
-        median_cov = int(median(coverages))
+        mean_meth = (sum_pct / n_cpgs) / 100.0
+        mean_cov = sum_cov / n_cpgs
 
-    log.info("assay_id=%s n_cpgs=%d mean_meth=%.4f median_cov=%d",
-             args.assay_id, n_cpgs, mean_meth, median_cov)
+    log.info(
+        "assay_id=%s mod=%s n_cpgs=%d mean_meth=%.4f mean_cov=%.2f "
+        "(skipped_mod=%d skipped_cov=%d)",
+        args.assay_id, args.mod_code, n_cpgs, mean_meth, mean_cov,
+        n_skipped_mod, n_skipped_cov,
+    )
 
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w") as fh:
-        fh.write("assay_id\tmean_meth\tn_cpgs\tmedian_cov\n")
-        fh.write(f"{args.assay_id}\t{mean_meth:.4f}\t{n_cpgs}\t{median_cov}\n")
+        fh.write("assay_id\tmean_meth\tn_cpgs\tmean_cov\n")
+        fh.write(
+            f"{args.assay_id}\t{mean_meth:.4f}\t{n_cpgs}\t{mean_cov:.2f}\n"
+        )
     log.info("Wrote %s", out)
     return 0
 
