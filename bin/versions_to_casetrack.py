@@ -36,6 +36,13 @@ import tomllib
 from pathlib import Path
 
 
+_KEY_BY_LEVEL = {
+    "patient":  "patient_id",
+    "specimen": "specimen_id",
+    "assay":    "assay_id",
+}
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--project-dir", required=True,
@@ -157,8 +164,9 @@ def main() -> int:
         tsv = Path(tempfile.mkstemp(
             prefix=f"casetrack_versions_{tool_lower}_", suffix=".tsv")[1])
         colnames = sorted(cols.keys())
+        key_col = _KEY_BY_LEVEL[args.level]
         with open(tsv, "w") as fh:
-            fh.write("\t".join(["assay_id"] + colnames) + "\n")
+            fh.write("\t".join([key_col] + colnames) + "\n")
             for aid in assay_ids:
                 fh.write("\t".join([aid] + [cols[c] for c in colnames]) + "\n")
         log.info("tool=%s prefix=%s versions=%s tsv=%s",

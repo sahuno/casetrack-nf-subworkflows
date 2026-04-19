@@ -44,6 +44,15 @@ from pathlib import Path
 from typing import Iterable
 
 
+# Casetrack uses different key column names per level; the trace TSV we hand
+# to `casetrack append` must put the level-appropriate name in column 1.
+_KEY_BY_LEVEL = {
+    "patient":  "patient_id",
+    "specimen": "specimen_id",
+    "assay":    "assay_id",
+}
+
+
 # ── duration / byte-size parsers ──────────────────────────────────────────────
 
 # Nextflow-style durations: "5ms", "1.5s", "2m", "1h30m", "1h 30m 5s"
@@ -180,19 +189,24 @@ def collapse_to_last_attempt(rows: list[dict]) -> list[dict]:
     return list(best.values())
 
 
-def build_per_tool_tsv(rows: list[dict]) -> Path:
-    """Emit a TSV for a single tool with one row per assay and UNprefixed
+def build_per_tool_tsv(rows: list[dict], level: str) -> Path:
+    """Emit a TSV for a single tool with one row per entity and UNprefixed
     metric columns. ``casetrack append --column-prefix <prefix>`` will add
     the prefix on the way in.
 
-    Columns: assay_id, slurm_job_id, realtime_sec, peak_rss_bytes,
+    The first column name is level-appropriate (``assay_id`` /
+    ``specimen_id`` / ``patient_id``) because casetrack's ``append``
+    validates that the level's key column exists in the TSV.
+
+    Columns: <level_key>, slurm_job_id, realtime_sec, peak_rss_bytes,
              exit_status, attempts, queue.
     """
     cols = ["slurm_job_id", "realtime_sec", "peak_rss_bytes",
             "exit_status", "attempts", "queue"]
+    key_col = _KEY_BY_LEVEL[level]
     tsv = Path(tempfile.mkstemp(prefix="casetrack_trace_", suffix=".tsv")[1])
     with open(tsv, "w") as fh:
-        fh.write("\t".join(["assay_id"] + cols) + "\n")
+        fh.write("\t".join([key_col] + cols) + "\n")
         for r in sorted(rows, key=lambda x: x["_assay_id"]):
             metrics = {
                 "slurm_job_id":   r.get("native_id", "").strip() or "",
@@ -272,9 +286,9 @@ def main() -> int:
         tool_lower = tool_upper.lower()
         analysis_name = f"{tool_lower}_trace"
 
-        tsv = build_per_tool_tsv(tool_rows)
-        log.info("tool=%s prefix=%s rows=%d tsv=%s",
-                 tool_lower, prefix, len(tool_rows), tsv)
+        tsv = build_per_tool_tsv(tool_rows, args.level)
+        log.info("tool=%s prefix=%s rows=%d tsv=%s level=%s",
+                 tool_lower, prefix, len(tool_rows), tsv, args.level)
 
         if args.dry_run:
             log.info("--dry-run: skipping casetrack append for %s", tool_lower)
