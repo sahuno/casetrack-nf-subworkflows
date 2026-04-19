@@ -1,0 +1,23 @@
+# Nextflow
+.nextflow/
+.nextflow.log*
+work/
+*.nf-test/
+.nf-test.log
+
+# Results / reports
+results/
+report.html
+trace.txt
+timeline.html
+dag.html
+
+# Python
+__pycache__/
+*.pyc
+
+# Test artifacts
+test/data/*.bam
+test/data/*.bai
+test/data/*.fa
+test/data/*.fai

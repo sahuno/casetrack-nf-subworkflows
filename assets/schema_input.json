@@ -1,0 +1,43 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/sahuno/casetrack-nf-subworkflows/main/assets/schema_input.json",
+    "title": "casetrack-nf-subworkflows samplesheet schema",
+    "description": "Extended nf-core-style samplesheet for casetrack tracked pipelines. Adds the three-level hierarchy (patient, specimen, assay_id) and a genome build, on top of the standard nf-core 'sample + files' shape.",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "required": ["patient", "specimen", "assay_id", "genome", "bam"],
+        "properties": {
+            "patient": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]*$",
+                "errorMessage": "patient must match ^[A-Za-z0-9_][A-Za-z0-9_-]*$"
+            },
+            "specimen": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]*$",
+                "errorMessage": "specimen must match ^[A-Za-z0-9_][A-Za-z0-9_-]*$"
+            },
+            "assay_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]*$",
+                "errorMessage": "assay_id must match ^[A-Za-z0-9_][A-Za-z0-9_-]*$; also used as meta.id"
+            },
+            "genome": {
+                "type": "string",
+                "enum": ["mm10", "mm39", "hg38", "GRCh37", "t2t", "chm13"],
+                "errorMessage": "genome must be one of mm10, mm39, hg38, GRCh37, t2t, chm13"
+            },
+            "bam": {
+                "type": "string",
+                "pattern": "^\\S+\\.(bam|cram)$",
+                "errorMessage": "bam must be a BAM or CRAM file path"
+            },
+            "bai": {
+                "type": "string",
+                "pattern": "^\\S+\\.(bai|crai|csi)$",
+                "errorMessage": "bai must be a BAI/CRAI/CSI index file path"
+            }
+        }
+    }
+}

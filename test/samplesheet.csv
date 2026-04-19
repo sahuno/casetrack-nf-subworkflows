@@ -1,0 +1,2 @@
+patient,specimen,assay_id,genome,bam,bai
+P01,P01_primary,P01_primary_ONT1,hg38,test/data/stub.bam,test/data/stub.bam.bai
