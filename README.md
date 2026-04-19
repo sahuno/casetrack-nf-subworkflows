@@ -3,6 +3,9 @@
 **Reusable Nextflow DSL2 subworkflows that wrap stock nf-core modules with
 [`casetrack`](https://github.com/sahuno/casetrack) bookkeeping.**
 
+→ **[Full tutorial: docs/TUTORIAL.md](docs/TUTORIAL.md)** (from zero to tracked cohort in ~45 min)
+→ **[Worked example: examples/giab_chr21/](examples/giab_chr21/)** (real GIAB HG006 chr21 ONT run)
+
 One thin wrapper per nf-core module. Each wrapper adds a per-assay
 summary step and a `casetrack append --infer-from-path` register step
 — no edits to the underlying nf-core module, so `nf-core modules update`

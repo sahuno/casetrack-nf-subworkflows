@@ -1,0 +1,2 @@
+patient,specimen,assay_id,genome,bam,bai
+HG006,HG006_gDNA,HG006_PAY77227,hg38,/data1/greenbab/projects/GIAB_ont/GIAB_data/giab_2025.01/data/processed/hg38/chr21_bams/HG006_PAY77227.hg38.chr21.bam,/data1/greenbab/projects/GIAB_ont/GIAB_data/giab_2025.01/data/processed/hg38/chr21_bams/HG006_PAY77227.hg38.chr21.bam.bai
