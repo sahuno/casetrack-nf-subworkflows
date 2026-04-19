@@ -125,6 +125,29 @@ casetrack register --project-dir "$PROJ" --level assay \
     --meta 'assay_type=ONT_WGS,flowcell_id=PAY77227,chemistry=R10.4.1'
 ```
 
+### ID format requirements (casetrack v0.6+)
+
+`patient_id`, `specimen_id`, and `assay_id` must match the default regex:
+
+```
+\A[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\Z
+```
+
+ASCII alphanumeric start; then alphanumeric, underscore, hyphen, or dot; 1–64 chars. No whitespace, no shell metacharacters, no path separators. Case-insensitive duplicates within a level (e.g. `HG006` and `hg006`) are rejected by default.
+
+Typos in the samplesheet fail loudly at `casetrack register`, before the Nextflow pipeline starts — which saves hours of debugging compared to a silent mismatch between samplesheet and DB. See [proposal 0005](https://github.com/sahuno/casetrack/blob/main/docs/proposals/0005-id-format-and-project-identity.md) for the full rule set.
+
+**Escape hatch for legacy LIMS IDs.** Cohorts with pre-existing IDs that contain colons, or that have legitimate case-variants, can loosen the rules per-level via `casetrack.toml`:
+
+```toml
+[levels.patient]
+key        = "patient_id"
+id_pattern = "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$"   # allow colons, 80 chars
+allow_case_variants = true                            # allow HG006 and hg006
+```
+
+Project-wide Unicode opt-in (e.g. for non-ASCII patient IDs) uses `[project] allow_unicode_ids = true`. Keep in mind most downstream bioinformatics tools mangle non-ASCII silently — opt in only when you have tested end-to-end.
+
 ## Step 5 — Write the samplesheet
 
 One row per assay. The column schema is enforced by `assets/schema_input.json`:
@@ -135,6 +158,8 @@ HG006,HG006_gDNA,HG006_PAY77227,hg38,/abs/path/HG006_PAY77227.hg38.chr21.bam,/ab
 ```
 
 `assay_id` doubles as `meta.id` so stock nf-core modules keep their `tag "${meta.id}"` working unchanged.
+
+IDs in the samplesheet must pass the same casetrack format rules noted in Step 4 — whitespace, path separators, and shell metacharacters will be rejected at `casetrack register` time.
 
 ## Step 6 — Write `custom.config`
 
@@ -239,6 +264,12 @@ From `casetrack append --infer-from-path`. Means the inferred tool name from the
 
 ### "Error: expected summary TSV not found"
 The wrapper process didn't land a `<tool>_summary.tsv` at the leaf directory. Check the `CASETRACK_REGISTER` process work dir (`.command.err`) for why the `cp` failed.
+
+### "Error: patient_id 'XYZ' is not a valid identifier"
+Casetrack v0.6+ rejects malformed hierarchy IDs at `register` time — whitespace, shell metacharacters, path separators, leading hyphens, non-ASCII. Clean the offending ID in the samplesheet, or loosen per-level via `id_pattern` in `casetrack.toml` (see Step 4). See `test/run_test_malformed.sh` for worked examples of all three rejection modes.
+
+### "patient_id 'hg006' conflicts with existing case-variant 'HG006'"
+Case-insensitive duplicate check — `HG006` and `hg006` can't coexist in the same level by default (almost always a typo). If you need both, set `[levels.patient] allow_case_variants = true` in `casetrack.toml`.
 
 ### `[SLURM] queue ... cannot be fetched, exit status 143`
 Transient — Nextflow's periodic `squeue` poll got SIGTERMed by the kernel on a busy login node. Not fatal.
