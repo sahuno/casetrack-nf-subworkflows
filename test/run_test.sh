@@ -112,6 +112,21 @@ for col in modkit_realtime_sec modkit_peak_rss_bytes modkit_slurm_job_id modkit_
         || { echo "FAIL: trace column ${col} not created"; exit 1; }
 done
 
+# ── 6. L3 assertions — versions import ───────────────────────────────────────
 echo
-echo "PASS — stub smoke test OK (L1 + L2)"
+echo "== asserting versions import (L3)"
+VERSIONS="${PROJ}/results/_nextflow/${RUN_TAG}/versions.yml"
+test -f "${VERSIONS}" || { echo "FAIL: versions.yml missing at ${VERSIONS}"; exit 1; }
+
+# Show what's in the versions file.
+head -10 "${VERSIONS}"
+echo
+
+MODKIT_VER=$(SELECT "SELECT modkit_modkit_version FROM assays WHERE assay_id='P01_primary_ONT1';")
+test -n "${MODKIT_VER}" \
+    || { echo "FAIL: modkit_modkit_version not populated"; exit 1; }
+echo "modkit version recorded: ${MODKIT_VER}"
+
+echo
+echo "PASS — stub smoke test OK (L1 + L2 + L3)"
 echo "       workspace: ${TMPROOT}"
