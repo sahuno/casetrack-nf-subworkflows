@@ -17,45 +17,55 @@
 
 nextflow.enable.dsl = 2
 
-include { INPUT_CHECK            } from './subworkflows/local/input_check.nf'
-include { MODKIT_PILEUP_TRACKED  } from './subworkflows/local/modkit_pileup_tracked.nf'
-include { MODKIT_MERGED_TRACKED  } from './subworkflows/local/modkit_merged_tracked.nf'
+include { INPUT_CHECK             } from './subworkflows/local/input_check.nf'
+include { MODKIT_PILEUP_TRACKED   } from './subworkflows/local/modkit_pileup_tracked.nf'
+include { MODKIT_MERGED_TRACKED   } from './subworkflows/local/modkit_merged_tracked.nf'
+include { SAMTOOLS_SORT_TRACKED   } from './subworkflows/local/samtools_sort_tracked.nf'
 
 workflow {
     // Guard rails — fail fast before any heavy lifting starts.
     if (!params.input) error "--input <samplesheet.csv> is required"
     if (!params.casetrack_project_dir) error "--casetrack_project_dir is required"
     if (!params.run_tag) error "--run_tag is required (e.g. 20260418_hg38_v1)"
-    if (!params.fasta && !workflow.stubRun) error "--fasta is required for non-stub runs"
 
     def level = params.casetrack_level ?: 'assay'
     if (!(level in ['assay', 'specimen', 'patient'])) {
         error "--casetrack_level must be one of: assay, specimen, patient (got '${level}')"
     }
 
+    def tool = params.tool ?: 'modkit_pileup'
+
     INPUT_CHECK(params.input, level)
 
-    // Build the reference channel once, fan out to every MODKIT_PILEUP call.
-    ch_fasta = params.fasta
-        ? Channel.of([[id: 'ref'], file(params.fasta, checkIfExists: true),
-                      file(params.fai, checkIfExists: true)]).first()
-        : Channel.of([[id: 'ref'], [], []]).first()
-
-    ch_bed = params.bed
-        ? Channel.of([[id: 'regions'], file(params.bed, checkIfExists: true)]).first()
-        : Channel.of([[id: 'regions'], []]).first()
-
-    if (level == 'specimen') {
-        MODKIT_MERGED_TRACKED(INPUT_CHECK.out.bam_bai, ch_fasta, ch_bed)
+    if (tool == 'samtools_sort') {
+        // Sort doesn't need a reference — pass BAM only (strip BAI).
+        ch_bam_only = INPUT_CHECK.out.bam_bai.map { meta, bam, bai -> tuple(meta, bam) }
+        SAMTOOLS_SORT_TRACKED(ch_bam_only)
     } else {
-        MODKIT_PILEUP_TRACKED(INPUT_CHECK.out.bam_bai, ch_fasta, ch_bed)
+        if (!params.fasta && !workflow.stubRun) error "--fasta is required for modkit runs"
+
+        // Build the reference channel once, fan out to every MODKIT_PILEUP call.
+        ch_fasta = params.fasta
+            ? Channel.of([[id: 'ref'], file(params.fasta, checkIfExists: true),
+                          file(params.fai, checkIfExists: true)]).first()
+            : Channel.of([[id: 'ref'], [], []]).first()
+
+        ch_bed = params.bed
+            ? Channel.of([[id: 'regions'], file(params.bed, checkIfExists: true)]).first()
+            : Channel.of([[id: 'regions'], []]).first()
+
+        if (level == 'specimen' || tool == 'modkit_merged') {
+            MODKIT_MERGED_TRACKED(INPUT_CHECK.out.bam_bai, ch_fasta, ch_bed)
+        } else {
+            MODKIT_PILEUP_TRACKED(INPUT_CHECK.out.bam_bai, ch_fasta, ch_bed)
+        }
     }
 
     // L3 — collect the nf-core `topic: versions` channel to one YAML per run.
     // Format matches the nf-core convention; versions_to_casetrack.py parses
     // it in onComplete and writes {prefix}_tool_version columns.
     channel.topic('versions')
-        .map { process, tool, version -> "${process}:\n    ${tool}: ${version}\n" }
+        .map { process, sw, version -> "${process}:\n    ${sw}: ${version}\n" }
         .unique()
         .collectFile(
             name: 'versions.yml',
