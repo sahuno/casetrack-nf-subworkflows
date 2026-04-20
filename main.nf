@@ -19,6 +19,7 @@ nextflow.enable.dsl = 2
 
 include { INPUT_CHECK            } from './subworkflows/local/input_check.nf'
 include { MODKIT_PILEUP_TRACKED  } from './subworkflows/local/modkit_pileup_tracked.nf'
+include { MODKIT_MERGED_TRACKED  } from './subworkflows/local/modkit_merged_tracked.nf'
 
 workflow {
     // Guard rails — fail fast before any heavy lifting starts.
@@ -27,7 +28,12 @@ workflow {
     if (!params.run_tag) error "--run_tag is required (e.g. 20260418_hg38_v1)"
     if (!params.fasta && !workflow.stubRun) error "--fasta is required for non-stub runs"
 
-    INPUT_CHECK(params.input)
+    def level = params.casetrack_level ?: 'assay'
+    if (!(level in ['assay', 'specimen', 'patient'])) {
+        error "--casetrack_level must be one of: assay, specimen, patient (got '${level}')"
+    }
+
+    INPUT_CHECK(params.input, level)
 
     // Build the reference channel once, fan out to every MODKIT_PILEUP call.
     ch_fasta = params.fasta
@@ -39,7 +45,11 @@ workflow {
         ? Channel.of([[id: 'regions'], file(params.bed, checkIfExists: true)]).first()
         : Channel.of([[id: 'regions'], []]).first()
 
-    MODKIT_PILEUP_TRACKED(INPUT_CHECK.out.bam_bai, ch_fasta, ch_bed)
+    if (level == 'specimen') {
+        MODKIT_MERGED_TRACKED(INPUT_CHECK.out.bam_bai, ch_fasta, ch_bed)
+    } else {
+        MODKIT_PILEUP_TRACKED(INPUT_CHECK.out.bam_bai, ch_fasta, ch_bed)
+    }
 
     // L3 — collect the nf-core `topic: versions` channel to one YAML per run.
     // Format matches the nf-core convention; versions_to_casetrack.py parses
@@ -75,11 +85,13 @@ workflow.onComplete {
     }
 
     def trace_helper = "${projectDir}/bin/trace_to_casetrack.py"
+    def trace_level = params.casetrack_level ?: 'assay'
     def trace_cmd = [
         trace_helper,
         '--project-dir',  params.casetrack_project_dir.toString(),
         '--trace',        trace_path,
         '--run-tag',      params.run_tag.toString(),
+        '--level',        trace_level,
         '--casetrack-bin', params.casetrack_bin.toString(),
     ]
     log.info "casetrack trace import: ${trace_cmd.join(' ')}"
@@ -98,12 +110,23 @@ workflow.onComplete {
         if (!versions_file.exists()) {
             log.warn "casetrack versions import: ${versions_path} not found — skipping"
         } else {
-            // Collect assay_ids from the samplesheet — versions are run-level,
-            // so they get broadcast to every assay row this run covered.
-            def assay_ids = new File(params.input.toString())
-                .readLines()
+            // Collect IDs at the run's tracking level — versions are run-level,
+            // broadcast to every row this run covered. Column to read from the
+            // samplesheet depends on level (ADR-001).
+            def level = params.casetrack_level ?: 'assay'
+            def key_col = level == 'specimen' ? 'specimen'
+                        : level == 'patient'  ? 'patient'
+                        : 'assay_id'
+            def lines = new File(params.input.toString()).readLines()
+            def header = lines[0].split(',').toList()
+            def key_idx = header.indexOf(key_col)
+            if (key_idx < 0) {
+                log.warn "casetrack versions import: samplesheet missing '${key_col}' column — skipping"
+                return
+            }
+            def ids = lines
                 .drop(1)
-                .collect { it.split(',')[2] }
+                .collect { it.split(',')[key_idx] }
                 .findAll { it }
                 .unique()
                 .join(',')
@@ -113,7 +136,8 @@ workflow.onComplete {
                 '--project-dir',   params.casetrack_project_dir.toString(),
                 '--versions',      versions_path,
                 '--run-tag',       params.run_tag.toString(),
-                '--assay-ids',     assay_ids,
+                '--assay-ids',     ids,
+                '--level',         level,
                 '--casetrack-bin', params.casetrack_bin.toString(),
             ]
             log.info "casetrack versions import: ${versions_cmd.join(' ')}"

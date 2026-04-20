@@ -282,7 +282,78 @@ The container doesn't ship `ps` (`procps`). Harmless warning; Nextflow falls bac
 - **Query your whole cohort** with `casetrack dashboard` — self-contained HTML, one row per assay.
 - **Scale out**: add more samples to `samplesheet.csv`. Each assay runs in parallel on SLURM; `CASETRACK_REGISTER` throttles to `maxForks=1` automatically so SQLite WAL doesn't contend.
 - **Add more tools**: see "Adding a new tracked tool" above.
+- **Track at the specimen level** (e.g. merged BAMs from multiple flowcells): see the MODKIT_MERGED_TRACKED pattern below.
 - **Integrate with nf-core pipelines** (unmodified): use the drop-in config below.
+
+## Pattern B' — specimen-level wrapper (MODKIT_MERGED_TRACKED)
+
+Use this when the biological unit is the **specimen** (one merged BAM made
+from all flowcells of that specimen), not individual flowcells. Typical
+case: you've merged per-flowcell ONT BAMs with `samtools merge` and want
+one `modkit pileup` row per specimen.
+
+Two things change versus the default assay-level flow:
+
+### Samplesheet — no `assay_id` column
+
+The specimen is the unit, so the sheet has one row per specimen with
+`patient, specimen, genome, bam, bai`:
+
+```csv
+patient,specimen,genome,bam,bai
+HG006,HG006_gDNA,hg38,/path/to/HG006_gDNA.merged.bam,/path/to/HG006_gDNA.merged.bam.bai
+HG007,HG007_gDNA,hg38,/path/to/HG007_gDNA.merged.bam,/path/to/HG007_gDNA.merged.bam.bai
+```
+
+JSON Schema: `assets/schema_input_specimen.json`.
+
+### casetrack.toml — declare the analysis with an `nf_process` alias
+
+Because the wrapper reuses the stock `MODKIT_PILEUP` nf-core module, the
+nextflow trace and `versions.yml` both record it as `MODKIT_PILEUP`. Tell
+the L2/L3 importers that those rows belong to your `modkit_merged`
+analysis via `nf_process`:
+
+```toml
+[analyses.modkit_merged]
+level         = "specimen"
+column_prefix = "modkit_merged"
+summary_tsv   = "modkit_merged_summary.tsv"
+nf_process    = "MODKIT_PILEUP"   # trace/versions lookup alias
+```
+
+Without `nf_process`, the importers would look for `[analyses.modkit_pileup]`
+and skip the row. If you run assay-level MODKIT_PILEUP *and* specimen-level
+MODKIT_MERGED in the same project, give each its own `nf_process` — last
+declaration wins per alias, so distinct wrapper names are required.
+
+### Pipeline invocation
+
+```bash
+nextflow run /path/to/casetrack-nf-subworkflows/main.nf \
+    --input                 specimens.csv \
+    --fasta                 /path/to/reference.fa \
+    --fai                   /path/to/reference.fa.fai \
+    --casetrack_project_dir "${PROJ}" \
+    --casetrack_level       specimen \
+    --run_tag               20260420_hg38_merged_v1 \
+    -profile                slurm,apptainer
+```
+
+Two differences from the assay-level call: `--casetrack_level specimen`
+switches `main.nf` to `MODKIT_MERGED_TRACKED` and tells `INPUT_CHECK` to
+accept the specimen-level schema.
+
+### Resulting casetrack DB
+
+```sql
+SELECT specimen_id, modkit_merged_mean_meth, modkit_merged_n_cpgs,
+       modkit_merged_slurm_job_id, modkit_merged_modkit_version
+FROM specimens;
+```
+
+`assays` is empty (no `assay_id` was provided). All data, trace, and
+versions columns land on `specimens`.
 
 ## Pattern C — drop-in config for an unmodified nf-core pipeline
 

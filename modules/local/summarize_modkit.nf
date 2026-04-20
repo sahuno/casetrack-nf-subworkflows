@@ -26,17 +26,29 @@ process SUMMARIZE_MODKIT {
 
     script:
     def min_cov = task.ext.min_coverage ?: 5
+    def (id_col, id_value) = _resolve_key(meta, params.casetrack_level ?: 'assay')
     """
     summarize_modkit.py \\
         --bedmethyl ${bedgz} \\
-        --assay-id ${meta.assay_id} \\
+        --id-col ${id_col} \\
+        --id-value ${id_value} \\
         --output modkit_summary.tsv \\
         --min-coverage ${min_cov}
     """
 
     stub:
+    def (id_col, id_value) = _resolve_key(meta, params.casetrack_level ?: 'assay')
     """
-    printf 'assay_id\\tmean_meth\\tn_cpgs\\tmean_cov\\n' > modkit_summary.tsv
-    printf '%s\\t0.7200\\t1500\\t18.00\\n' '${meta.assay_id}' >> modkit_summary.tsv
+    printf '${id_col}\\tmean_meth\\tn_cpgs\\tmean_cov\\n' > modkit_summary.tsv
+    printf '%s\\t0.7200\\t1500\\t18.00\\n' '${id_value}' >> modkit_summary.tsv
     """
+}
+
+// Level → (id_col, id_value). Mirrors casetrack_register.nf's _resolve_leaf
+// so the TSV key lines up with the SQLite primary key at that level.
+def _resolve_key(meta, level) {
+    if (level == 'assay')    return ['assay_id',    meta.assay_id]
+    if (level == 'specimen') return ['specimen_id', meta.specimen]
+    if (level == 'patient')  return ['patient_id',  meta.patient]
+    error "params.casetrack_level must be one of: assay, specimen, patient (got '${level}')"
 }

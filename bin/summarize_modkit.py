@@ -22,8 +22,16 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--bedmethyl", required=True,
                    help="Path to modkit pileup bedMethyl (may be .bed or .bed.gz)")
-    p.add_argument("--assay-id", required=True,
-                   help="Assay id; written as the first column of the summary TSV")
+    # Level-aware key (ADR-001). --assay-id stays as a back-compat shortcut.
+    p.add_argument("--id-col", default=None,
+                   help="Name of the key column in the output TSV "
+                        "(assay_id | specimen_id | patient_id). Required unless "
+                        "--assay-id is given.")
+    p.add_argument("--id-value", default=None,
+                   help="Value for the key column. Required unless --assay-id is given.")
+    p.add_argument("--assay-id", default=None,
+                   help="Shortcut for --id-col assay_id --id-value <X>. Kept for "
+                        "back-compat with v0.1–v0.4 callers.")
     p.add_argument("--output", required=True, help="Output summary TSV path")
     p.add_argument("--min-coverage", type=int, default=5,
                    help="Minimum per-site coverage to include in the mean (default: 5)")
@@ -32,6 +40,20 @@ def parse_args() -> argparse.Namespace:
                         "to include all; modkit pileup emits one row per site per "
                         "mod code (m, h, a) so filtering is usually required.")
     return p.parse_args()
+
+
+def _resolve_key(args: argparse.Namespace) -> tuple[str, str]:
+    """Pick the (column_name, value) pair from the three possible flag shapes."""
+    if args.assay_id:
+        return "assay_id", args.assay_id
+    if args.id_col and args.id_value:
+        allowed = {"assay_id", "specimen_id", "patient_id"}
+        if args.id_col not in allowed:
+            raise SystemExit(
+                f"--id-col must be one of {sorted(allowed)}, got {args.id_col!r}")
+        return args.id_col, args.id_value
+    raise SystemExit(
+        "must provide either --assay-id <X>, or --id-col <col> --id-value <X>")
 
 
 def iter_bedmethyl(path: Path):
@@ -66,6 +88,8 @@ def main() -> int:
         format="[%(asctime)s] %(levelname)s: %(message)s",
     )
     log = logging.getLogger("summarize_modkit")
+
+    id_col, id_value = _resolve_key(args)
 
     src = Path(args.bedmethyl)
     if not src.exists():
@@ -108,18 +132,18 @@ def main() -> int:
         mean_cov = sum_cov / n_cpgs
 
     log.info(
-        "assay_id=%s mod=%s n_cpgs=%d mean_meth=%.4f mean_cov=%.2f "
+        "%s=%s mod=%s n_cpgs=%d mean_meth=%.4f mean_cov=%.2f "
         "(skipped_mod=%d skipped_cov=%d)",
-        args.assay_id, args.mod_code, n_cpgs, mean_meth, mean_cov,
+        id_col, id_value, args.mod_code, n_cpgs, mean_meth, mean_cov,
         n_skipped_mod, n_skipped_cov,
     )
 
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w") as fh:
-        fh.write("assay_id\tmean_meth\tn_cpgs\tmean_cov\n")
+        fh.write(f"{id_col}\tmean_meth\tn_cpgs\tmean_cov\n")
         fh.write(
-            f"{args.assay_id}\t{mean_meth:.4f}\t{n_cpgs}\t{mean_cov:.2f}\n"
+            f"{id_value}\t{mean_meth:.4f}\t{n_cpgs}\t{mean_cov:.2f}\n"
         )
     log.info("Wrote %s", out)
     return 0

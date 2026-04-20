@@ -135,18 +135,35 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def load_tool_prefix_map(toml_path: Path) -> dict[str, str]:
-    """Return a case-insensitive map from NF process name → column_prefix.
+def load_tool_prefix_map(toml_path: Path) -> dict[str, tuple[str, str]]:
+    """Return a case-insensitive map from NF process name → (analysis_key, column_prefix).
 
-    Example: {'MODKIT_PILEUP': 'modkit', 'DORADO_BASECALLER': 'dorado'}
+    For every ``[analyses.<key>]`` block, registers a lookup under
+    ``key.upper()`` and — if set — also under ``nf_process.upper()``.
+    The ``nf_process`` alias supports wrapper-renamed analyses
+    (e.g. ``[analyses.modkit_merged] nf_process = "MODKIT_PILEUP"``),
+    where the nextflow trace records the stock tool name but the
+    casetrack analysis is tracked under a different key.
+
+    Example:
+        [analyses.modkit_pileup]   → MODKIT_PILEUP  → ("modkit_pileup",  "modkit")
+        [analyses.modkit_merged]
+          nf_process = "MODKIT_PILEUP"
+                                   → MODKIT_PILEUP  → ("modkit_merged",  "modkit_merged")
+                                     (alias overwrites the plain key — last
+                                      declaration wins; projects that need
+                                      both must give distinct nf_process)
     """
     with open(toml_path, "rb") as f:
         schema = tomllib.load(f)
     analyses = schema.get("analyses") or {}
-    out: dict[str, str] = {}
+    out: dict[str, tuple[str, str]] = {}
     for tool, spec in analyses.items():
         prefix = spec.get("column_prefix") or tool
-        out[tool.upper()] = prefix
+        out[tool.upper()] = (tool, prefix)
+        alias = spec.get("nf_process")
+        if alias:
+            out[alias.upper()] = (tool, prefix)
     return out
 
 
@@ -281,17 +298,17 @@ def main() -> int:
         by_tool.setdefault(r["_tool"], []).append(r)
 
     overall_rc = 0
-    for tool_upper, tool_rows in sorted(by_tool.items()):
-        prefix = prefix_map[tool_upper]
-        tool_lower = tool_upper.lower()
-        analysis_name = f"{tool_lower}_trace"
+    for nf_proc_upper, tool_rows in sorted(by_tool.items()):
+        analysis_key, prefix = prefix_map[nf_proc_upper]
+        analysis_name = f"{analysis_key}_trace"
 
         tsv = build_per_tool_tsv(tool_rows, args.level)
-        log.info("tool=%s prefix=%s rows=%d tsv=%s level=%s",
-                 tool_lower, prefix, len(tool_rows), tsv, args.level)
+        log.info("tool=%s (nf=%s) prefix=%s rows=%d tsv=%s level=%s",
+                 analysis_key, nf_proc_upper.lower(), prefix,
+                 len(tool_rows), tsv, args.level)
 
         if args.dry_run:
-            log.info("--dry-run: skipping casetrack append for %s", tool_lower)
+            log.info("--dry-run: skipping casetrack append for %s", analysis_key)
             tsv.unlink()
             continue
 
@@ -319,7 +336,7 @@ def main() -> int:
             except OSError:
                 pass
         if rc != 0:
-            log.error("casetrack append failed for %s with rc=%d", tool_lower, rc)
+            log.error("casetrack append failed for %s with rc=%d", analysis_key, rc)
             overall_rc = rc
 
     if overall_rc == 0:

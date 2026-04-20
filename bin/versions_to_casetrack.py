@@ -63,15 +63,23 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def load_tool_prefix_map(toml_path: Path) -> dict[str, str]:
-    """NF process name (upper) → column_prefix."""
+def load_tool_prefix_map(toml_path: Path) -> dict[str, tuple[str, str]]:
+    """NF process name (upper) → (analysis_key, column_prefix).
+
+    Supports the ``nf_process`` alias for wrapper-renamed analyses
+    (see trace_to_casetrack.load_tool_prefix_map for the full contract).
+    """
     with open(toml_path, "rb") as f:
         schema = tomllib.load(f)
     analyses = schema.get("analyses") or {}
-    return {
-        tool.upper(): (spec.get("column_prefix") or tool)
-        for tool, spec in analyses.items()
-    }
+    out: dict[str, tuple[str, str]] = {}
+    for tool, spec in analyses.items():
+        prefix = spec.get("column_prefix") or tool
+        out[tool.upper()] = (tool, prefix)
+        alias = spec.get("nf_process")
+        if alias:
+            out[alias.upper()] = (tool, prefix)
+    return out
 
 
 # versions.yml is a minimal subset of YAML — we parse it without PyYAML so
@@ -148,8 +156,7 @@ def main() -> int:
         short = tool_from_process(process_name).upper()
         if short not in prefix_map:
             continue
-        prefix = prefix_map[short]
-        tool_lower = short.lower()
+        analysis_key, prefix = prefix_map[short]
 
         # Collect per-tool versions; use underscore-separated column names
         # to match casetrack's identifier rules.
@@ -162,15 +169,15 @@ def main() -> int:
             continue
 
         tsv = Path(tempfile.mkstemp(
-            prefix=f"casetrack_versions_{tool_lower}_", suffix=".tsv")[1])
+            prefix=f"casetrack_versions_{analysis_key}_", suffix=".tsv")[1])
         colnames = sorted(cols.keys())
         key_col = _KEY_BY_LEVEL[args.level]
         with open(tsv, "w") as fh:
             fh.write("\t".join([key_col] + colnames) + "\n")
             for aid in assay_ids:
                 fh.write("\t".join([aid] + [cols[c] for c in colnames]) + "\n")
-        log.info("tool=%s prefix=%s versions=%s tsv=%s",
-                 tool_lower, prefix, cols, tsv)
+        log.info("tool=%s (nf=%s) prefix=%s versions=%s tsv=%s",
+                 analysis_key, short.lower(), prefix, cols, tsv)
 
         if args.dry_run:
             log.info("--dry-run: skipping casetrack append")
@@ -183,7 +190,7 @@ def main() -> int:
             "--project-dir", str(project_dir),
             "--level", args.level,
             "--results", str(tsv),
-            "--analysis", f"{tool_lower}_versions",
+            "--analysis", f"{analysis_key}_versions",
             "--column-prefix", prefix,
             "--col-type", col_types,
         ]
@@ -199,7 +206,7 @@ def main() -> int:
             except OSError:
                 pass
         if rc != 0:
-            log.error("casetrack append failed for %s with rc=%d", tool_lower, rc)
+            log.error("casetrack append failed for %s with rc=%d", analysis_key, rc)
             overall_rc = rc
         else:
             wrote_any = True

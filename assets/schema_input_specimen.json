@@ -1,0 +1,39 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/sahuno/casetrack-nf-subworkflows/main/assets/schema_input_specimen.json",
+    "title": "casetrack-nf-subworkflows specimen-level samplesheet schema",
+    "description": "Samplesheet shape for tracked subworkflows that operate on specimen-level inputs (e.g. merged BAMs). No assay_id column — one row per specimen. ADR-001 D2.",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "required": ["patient", "specimen", "genome", "bam"],
+        "properties": {
+            "patient": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]*$",
+                "errorMessage": "patient must match ^[A-Za-z0-9_][A-Za-z0-9_-]*$"
+            },
+            "specimen": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]*$",
+                "errorMessage": "specimen must match ^[A-Za-z0-9_][A-Za-z0-9_-]*$; also used as meta.id"
+            },
+            "genome": {
+                "type": "string",
+                "enum": ["mm10", "mm39", "hg38", "GRCh37", "t2t", "chm13"],
+                "errorMessage": "genome must be one of mm10, mm39, hg38, GRCh37, t2t, chm13"
+            },
+            "bam": {
+                "type": "string",
+                "pattern": "^\\S+\\.(bam|cram)$",
+                "errorMessage": "bam must be a BAM or CRAM file path (specimen-level merged BAM)"
+            },
+            "bai": {
+                "type": "string",
+                "pattern": "^\\S+\\.(bai|crai|csi)$",
+                "errorMessage": "bai must be a BAI/CRAI/CSI index file path"
+            }
+        },
+        "additionalProperties": false
+    }
+}
