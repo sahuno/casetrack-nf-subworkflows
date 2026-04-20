@@ -19,6 +19,11 @@
             "branch": "master",
             "git_sha": "156feda0cb6589cd29c04902004fa3b53bc00205",
             "installed_by": ["modules"]
+          },
+          "sniffles": {
+            "branch": "master",
+            "git_sha": "e9ada3f5b55b43c0da9ad4882b86aaaa0c5e6ebf",
+            "installed_by": ["modules"]
           }
         }
       },

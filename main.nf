@@ -23,6 +23,7 @@ include { MODKIT_MERGED_TRACKED     } from './subworkflows/local/modkit_merged_t
 include { SAMTOOLS_SORT_TRACKED     } from './subworkflows/local/samtools_sort_tracked.nf'
 include { DORADO_BASECALLER_TRACKED  } from './subworkflows/local/dorado_basecaller_tracked.nf'
 include { MODKIT_CALLMODS_TRACKED    } from './subworkflows/local/modkit_callmods_tracked.nf'
+include { SNIFFLES2_TRACKED          } from './subworkflows/local/sniffles2_tracked.nf'
 
 workflow {
     // Guard rails — fail fast before any heavy lifting starts.
@@ -46,6 +47,14 @@ workflow {
     } else if (tool == 'modkit_callmods') {
         ch_bam_only = INPUT_CHECK.out.bam_bai.map { meta, bam, bai -> tuple(meta, bam) }
         MODKIT_CALLMODS_TRACKED(ch_bam_only)
+    } else if (tool == 'sniffles2') {
+        ch_ref_sv = params.fasta
+            ? Channel.of([[id:'ref'], file(params.fasta)]).first()
+            : Channel.of([[id:'ref'], []]).first()
+        ch_tandem = params.bed
+            ? Channel.of([[id:'tandem'], file(params.bed)]).first()
+            : Channel.of([[id:'tandem'], []]).first()
+        SNIFFLES2_TRACKED(INPUT_CHECK.out.bam_bai, ch_ref_sv, ch_tandem)
     } else if (tool == 'dorado_basecaller') {
         if (!params.dorado_model) error "--dorado_model is required when --tool=dorado_basecaller"
         // INPUT_CHECK provides pod5_dir in the bam slot for dorado samplesheets.
