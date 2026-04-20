@@ -1,0 +1,70 @@
+name: smoke-tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: smoke-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stub-smoke:
+    name: stub smoke · ${{ matrix.test }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - run_test          # MODKIT_PILEUP_TRACKED (assay level)
+          - run_test_merged   # MODKIT_MERGED_TRACKED (specimen level)
+          - run_test_sort     # SAMTOOLS_SORT_TRACKED
+          - run_test_dorado   # DORADO_BASECALLER_TRACKED
+          - run_test_callmods # MODKIT_CALLMODS_TRACKED
+          - run_test_sniffles2 # SNIFFLES2_TRACKED
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17 (required by Nextflow)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install Nextflow
+        run: |
+          curl -s https://get.nextflow.io | bash
+          sudo mv nextflow /usr/local/bin/
+          nextflow -version
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install casetrack
+        run: |
+          pip install --upgrade pip
+          pip install "pandas>=1.5.0" duckdb openpyxl pyarrow
+          # Install casetrack from PyPI (replace with git ref if needed)
+          pip install git+https://github.com/sahuno/casetrack.git
+
+      - name: Show environment
+        run: |
+          nextflow -version
+          python --version
+          casetrack --version
+          sqlite3 --version
+
+      - name: Run ${{ matrix.test }} (stub)
+        run: bash test/${{ matrix.test }}.sh
+        env:
+          NXF_ANSI_LOG: false
+          # Keep Nextflow work dirs inside runner tmp to avoid home quota.
+          NXF_WORK: /tmp/nxf_work_${{ matrix.test }}
