@@ -21,7 +21,8 @@ include { INPUT_CHECK               } from './subworkflows/local/input_check.nf'
 include { MODKIT_PILEUP_TRACKED     } from './subworkflows/local/modkit_pileup_tracked.nf'
 include { MODKIT_MERGED_TRACKED     } from './subworkflows/local/modkit_merged_tracked.nf'
 include { SAMTOOLS_SORT_TRACKED     } from './subworkflows/local/samtools_sort_tracked.nf'
-include { DORADO_BASECALLER_TRACKED } from './subworkflows/local/dorado_basecaller_tracked.nf'
+include { DORADO_BASECALLER_TRACKED  } from './subworkflows/local/dorado_basecaller_tracked.nf'
+include { MODKIT_CALLMODS_TRACKED    } from './subworkflows/local/modkit_callmods_tracked.nf'
 
 workflow {
     // Guard rails — fail fast before any heavy lifting starts.
@@ -42,6 +43,9 @@ workflow {
         // Sort doesn't need a reference — pass BAM only (strip BAI).
         ch_bam_only = INPUT_CHECK.out.bam_bai.map { meta, bam, bai -> tuple(meta, bam) }
         SAMTOOLS_SORT_TRACKED(ch_bam_only)
+    } else if (tool == 'modkit_callmods') {
+        ch_bam_only = INPUT_CHECK.out.bam_bai.map { meta, bam, bai -> tuple(meta, bam) }
+        MODKIT_CALLMODS_TRACKED(ch_bam_only)
     } else if (tool == 'dorado_basecaller') {
         if (!params.dorado_model) error "--dorado_model is required when --tool=dorado_basecaller"
         // INPUT_CHECK provides pod5_dir in the bam slot for dorado samplesheets.

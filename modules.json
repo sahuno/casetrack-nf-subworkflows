@@ -5,6 +5,11 @@
     "https://github.com/nf-core/modules.git": {
       "modules": {
         "nf-core": {
+          "modkit/callmods": {
+            "branch": "master",
+            "git_sha": "35eeb6173678fe41cebdaa731232c074adce7621",
+            "installed_by": ["modules"]
+          },
           "modkit/pileup": {
             "branch": "master",
             "git_sha": "3d81317a30d1016b533982d6b84df07713ae520a",
