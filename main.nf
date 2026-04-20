@@ -17,10 +17,11 @@
 
 nextflow.enable.dsl = 2
 
-include { INPUT_CHECK             } from './subworkflows/local/input_check.nf'
-include { MODKIT_PILEUP_TRACKED   } from './subworkflows/local/modkit_pileup_tracked.nf'
-include { MODKIT_MERGED_TRACKED   } from './subworkflows/local/modkit_merged_tracked.nf'
-include { SAMTOOLS_SORT_TRACKED   } from './subworkflows/local/samtools_sort_tracked.nf'
+include { INPUT_CHECK               } from './subworkflows/local/input_check.nf'
+include { MODKIT_PILEUP_TRACKED     } from './subworkflows/local/modkit_pileup_tracked.nf'
+include { MODKIT_MERGED_TRACKED     } from './subworkflows/local/modkit_merged_tracked.nf'
+include { SAMTOOLS_SORT_TRACKED     } from './subworkflows/local/samtools_sort_tracked.nf'
+include { DORADO_BASECALLER_TRACKED } from './subworkflows/local/dorado_basecaller_tracked.nf'
 
 workflow {
     // Guard rails — fail fast before any heavy lifting starts.
@@ -41,6 +42,16 @@ workflow {
         // Sort doesn't need a reference — pass BAM only (strip BAI).
         ch_bam_only = INPUT_CHECK.out.bam_bai.map { meta, bam, bai -> tuple(meta, bam) }
         SAMTOOLS_SORT_TRACKED(ch_bam_only)
+    } else if (tool == 'dorado_basecaller') {
+        if (!params.dorado_model) error "--dorado_model is required when --tool=dorado_basecaller"
+        // INPUT_CHECK provides pod5_dir in the bam slot for dorado samplesheets.
+        ch_pod5 = INPUT_CHECK.out.bam_bai.map { meta, pod5_dir, _bai -> tuple(meta, pod5_dir) }
+        // fasta is optional for dorado (used for alignment, not basecalling).
+        // Don't checkIfExists — stub runs and unaligned workflows pass no ref.
+        ch_ref  = params.fasta
+            ? Channel.of([[id:'ref'], file(params.fasta)]).first()
+            : Channel.of([[id:'ref'], []]).first()
+        DORADO_BASECALLER_TRACKED(ch_pod5, params.dorado_model, ch_ref)
     } else {
         if (!params.fasta && !workflow.stubRun) error "--fasta is required for modkit runs"
 
