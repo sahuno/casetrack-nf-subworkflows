@@ -18,6 +18,12 @@ process DORADO_BASECALLER {
 
     container 'docker.io/nanoporetech/dorado:latest'
 
+    publishDir(
+        path: { "${params.casetrack_project_dir}/data/processed/${meta.genome}/${meta.patient}/${meta.id}" },
+        mode: 'copy',
+        saveAs: { fn -> fn.endsWith('.bam') ? "${meta.id}.${meta.genome}.basecalled.bam" : null }
+    )
+
     // GPU resources declared via task.ext.args in custom.config:
     //   withName: 'DORADO_BASECALLER_TRACKED:DORADO_BASECALLER' {
     //       clusterOptions = '--gres=gpu:1'

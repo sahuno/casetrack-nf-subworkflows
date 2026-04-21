@@ -59,8 +59,9 @@ else:
     pass_rows = [r for r in rows if float(r.get('mean_qscore_template', 0) or 0) >= 8.0]
     pass_pct  = len(pass_rows) / n_reads * 100 if n_reads else 0.0
 
-header = [id_col, 'basecaller_model', 'n_reads', 'n_bases', 'read_n50', 'pass_pct', 'mean_qscore']
-row    = [id_value, model, n_reads, n_bases, n50, f'{pass_pct:.2f}', f'{mean_q:.3f}']
+bam_path = "${params.casetrack_project_dir}/data/processed/${meta.genome}/${meta.patient}/${meta.id}/${meta.id}.${meta.genome}.basecalled.bam"
+header = [id_col, 'basecaller_model', 'n_reads', 'n_bases', 'read_n50', 'pass_pct', 'mean_qscore', 'bam_path']
+row    = [id_value, model, n_reads, n_bases, n50, f'{pass_pct:.2f}', f'{mean_q:.3f}', bam_path]
 with open('dorado_basecaller_summary.tsv', 'w') as out:
     out.write('\\t'.join(header) + '\\n')
     out.write('\\t'.join(str(v) for v in row) + '\\n')

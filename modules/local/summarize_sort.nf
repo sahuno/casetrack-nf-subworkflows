@@ -23,10 +23,10 @@ process SUMMARIZE_SORT {
     """
     N_READS=\$(samtools view -c "${bam}")
     SIZE=\$(stat -c %s "${bam}")
-    ABS=\$(readlink -f "${bam}")
     SORT_ORDER=\$(samtools view -H "${bam}" | awk '/^@HD/{for(i=1;i<=NF;i++){if(\$i~/^SO:/){split(\$i,a,":");print a[2];exit}}}')
+    DEST="${params.casetrack_project_dir}/data/processed/${meta.genome}/${meta.patient}/${meta.id}/${meta.id}.${meta.genome}.sorted.bam"
     printf '${id_col}\\tsorted_bam_path\\tsorted_bam_size_bytes\\tn_reads\\tsort_order\\n' > samtools_sort_summary.tsv
-    printf '%s\\t%s\\t%s\\t%s\\t%s\\n' '${id_value}' "\$ABS" "\$SIZE" "\$N_READS" "\${SORT_ORDER:-unknown}" >> samtools_sort_summary.tsv
+    printf '%s\\t%s\\t%s\\t%s\\t%s\\n' '${id_value}' "\$DEST" "\$SIZE" "\$N_READS" "\${SORT_ORDER:-unknown}" >> samtools_sort_summary.tsv
     """
 
     stub:

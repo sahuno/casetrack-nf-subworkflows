@@ -24,7 +24,7 @@ process SUMMARIZE_SNIFFLES {
 
     script:
     def (id_col, id_value) = _resolve_key(meta, params.casetrack_level ?: 'assay')
-    def abs_vcf = "\$(readlink -f ${vcf_gz})"
+    def abs_vcf = "${params.casetrack_project_dir}/data/processed/${meta.genome}/${meta.patient}/${meta.id}/${meta.id}.${meta.genome}.sniffles.vcf.gz"
     """
     python3 ${projectDir}/bin/summarize_sniffles.py \\
         --vcf          "${vcf_gz}" \\

@@ -53,7 +53,7 @@ process CASETRACK_REGISTER {
     mkdir -p "\$LEAF"
     cp -f "${summary_tsv}" "\$LEAF/${summary_name}"
     cd "\$LEAF"
-    ${bin} append --infer-from-path
+    ${bin} append --infer-from-path --overwrite
     """
 
     stub:
@@ -68,7 +68,7 @@ process CASETRACK_REGISTER {
     mkdir -p "\$LEAF"
     cp -f "${summary_tsv}" "\$LEAF/${summary_name}"
     cd "\$LEAF"
-    ${bin} append --infer-from-path
+    ${bin} append --infer-from-path --overwrite
     """
 }
 
