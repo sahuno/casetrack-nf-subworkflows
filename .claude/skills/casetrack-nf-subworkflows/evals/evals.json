@@ -1,0 +1,40 @@
+{
+  "skill_name": "casetrack-nf-subworkflows",
+  "evals": [
+    {
+      "id": 0,
+      "name": "author-new-tracked-subworkflow",
+      "prompt": "I want to add SAMTOOLS_FLAGSTAT_TRACKED to casetrack-nf-subworkflows. The user's BAM is sorted+indexed; flagstat outputs a text report. I want to extract total reads, mapped reads, mapped%, and have it auto-flag a qc_warn if mapping rate is < 80% (or qc_fail if < 50%). Walk me through every file I need to create/edit, in order, with full code.",
+      "expected_output": "Agent produces: (1) summarize_flagstat.nf with _resolve_key helper, qc_pass/qc_fail_reason/qc_warn columns, samtools container; (2) samtools_flagstat_tracked.nf wrapping nf-core SAMTOOLS_FLAGSTAT + SUMMARIZE + CASETRACK_REGISTER; (3) the [analyses.samtools_flagstat] TOML block users need to add to their casetrack.toml with level=specimen, column_prefix=flagstat, summary_tsv=flagstat_summary.tsv, nf_process=SAMTOOLS_FLAGSTAT. Mentions that filename must match in 3 places.",
+      "files": []
+    },
+    {
+      "id": 1,
+      "name": "debug-infer-from-path-failure",
+      "prompt": "My CASETRACK_REGISTER is failing. The Nextflow log shows: `Error: --analysis is required (or infer it with --infer-from-path)`. The process is running `casetrack append --infer-from-path --overwrite` from `results/samtools_sort/20260421_hg38_test/p17424_1/p17424_1_tumor/` and there's a file `sort_summary.tsv` in that directory. My casetrack.toml has [analyses.samtools_sort] with level=specimen, summary_tsv=samtools_sort_summary.tsv. What's wrong?",
+      "expected_output": "Agent identifies the filename mismatch: file is sort_summary.tsv but TOML declares samtools_sort_summary.tsv. Fix is to rename file (or update TOML). Should mention the 3-place check (subworkflow path() output, subworkflow tuple element 3, TOML summary_tsv).",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "apptainer-nf-core-container-failure",
+      "prompt": "I'm running my tracked subworkflow with -profile slurm,apptainer on MSKCC IRIS. The MODKIT_CALLMODS process fails immediately with `community.wave.seqera.io/library/modkit/...: 401 Unauthorized`. I have the modkit_latest.sif locally at /data1/greenbab/users/ahunos/apps/containers/modkit_latest.sif. How do I fix this?",
+      "expected_output": "Agent diagnoses: nf-core modules check workflow.containerEngine == 'singularity', under apptainer it's 'apptainer' so falls to Docker/Wave branch which needs auth. Fix: override container in the apptainer profile via `process { withName: 'MODKIT_CALLMODS_TRACKED:MODKIT_CALLMODS' { container = '/path/to/modkit_latest.sif' } }`. Should mention the full subworkflow:process selector to scope the override.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "gpu-job-no-gpu-visible",
+      "prompt": "My DORADO_BASECALLER_TRACKED job submits successfully but inside the container it fails with `Failed to load NVML` and `--device cuda:all` doesn't find any GPUs. I'm using -profile slurm,apptainer,gpu. The job ran on what looks like a GPU node according to scontrol. What's wrong?",
+      "expected_output": "Agent diagnoses two possible issues: (1) missing --nv flag in apptainer.runOptions for the gpu profile (most likely) — fix is `apptainer.runOptions = '--bind /data1/greenbab --nv'` in the gpu profile. (2) wrong queue — must be `componc_gpu_batch` not `componc_cpu`. Should explain --nv enables NVIDIA driver passthrough into the container.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "name": "level-and-publishdir-for-new-tool",
+      "prompt": "I want to wrap a hypothetical CLAIR3 variant caller as CLAIR3_TRACKED. Clair3 takes a sorted BAM (one per specimen after merging) and outputs a VCF. I want the VCF persisted to data/processed/{genome}/{patient}/{specimen}/ with filename {specimen_id}.{genome}.clair3.vcf.gz. What level should this analysis live at, and what publishDir block should I add to nextflow.config?",
+      "expected_output": "Agent picks level=specimen (one BAM per specimen → one VCF per specimen). Provides publishDir block scoped via withName: 'CLAIR3_TRACKED:CLAIR3' { publishDir = [ path: { ... }, mode: 'copy', saveAs: ... ] } with the data/processed/{genome}/{patient}/{specimen} path. Notes that the summarize module must record the persistent path (not nxf_work readlink) in the summary TSV.",
+      "files": []
+    }
+  ]
+}

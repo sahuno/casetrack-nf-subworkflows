@@ -21,3 +21,10 @@ test/data/*.bam
 test/data/*.bai
 test/data/*.fa
 test/data/*.fai
+
+# Claude Code local harness state — ignore everything under .claude/
+# EXCEPT the shipped casetrack-nf-subworkflows skill bundle.
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/casetrack-nf-subworkflows/
